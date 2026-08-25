@@ -26,8 +26,6 @@ export class AnswerService {
     // 3. Build context
     const context = this.contextBuilder.build(chunks);
 
-    console.log({ query, queryEmbedding, chunks, context });
-
     if (!context.text) {
       return {
         answer: "I couldn't find relevant information in the documents.",
