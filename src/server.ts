@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import { App } from "./app.js";
 import { connectDatabase } from "./config/database.js";
-import { startConsumers } from "./messagesQueue/index.js";
+import { startConsumers } from "./messaging/index.js";
 
 const PORT = process.env.PORT || 3000;
 

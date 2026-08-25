@@ -1,4 +1,4 @@
-import { Schema, model, Types } from "mongoose";
+import { Schema, model } from "mongoose";
 
 const documentChunkSchema = new Schema(
   {
@@ -37,3 +37,19 @@ const documentChunkSchema = new Schema(
 documentChunkSchema.index({ documentId: 1, index: 1 }, { unique: true });
 
 export const DocumentChunkModel = model("DocumentChunk", documentChunkSchema);
+
+// Vector Search index
+DocumentChunkModel.collection.createSearchIndex({
+  name: "document_chunks_vector_index",
+  type: "vectorSearch",
+  definition: {
+    fields: [
+      {
+        type: "vector",
+        path: "embedding",
+        numDimensions: 3072,
+        similarity: "cosine",
+      },
+    ],
+  },
+});

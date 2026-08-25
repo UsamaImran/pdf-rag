@@ -3,7 +3,7 @@ import { FileService } from "./fileService.js";
 import { PdfTextExtractorService } from "./pdfTextExtractor.service.js";
 import { TokenizerService } from "./tokenizer.service.js";
 import { DocumentChunkService } from "./documentChunk.service.js";
-import { EmbeddingService } from "./embeddingService.js";
+import { EmbeddingService } from "./embedding.service.js";
 
 export class DocumentProcessorService {
   private readonly fileService = new FileService();

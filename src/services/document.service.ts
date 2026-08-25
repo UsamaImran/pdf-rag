@@ -1,5 +1,5 @@
 import { DocumentModel } from "../models/document.model.js";
-import { documentUploadProducer } from "../messagesQueue/providers/documentUpload.producer.js";
+import { documentUploadProducer } from "../messaging/providers/documentUpload.producer.js";
 import { FileService } from "./fileService.js";
 
 export class DocumentService {

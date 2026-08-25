@@ -26,13 +26,17 @@ services:
       - /app/node_modules
 
     depends_on:
-      - mongodb
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
 
   mongodb:
-    image: mongo:8
+    image: mongodb/mongodb-atlas-local:latest
 
     container_name: pdf-rag-mongodb
+
+    hostname: mongodb
 
     restart: unless-stopped
 
@@ -41,6 +45,8 @@ services:
 
     volumes:
       - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - mongodb_mongot:/data/mongot
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -58,4 +64,6 @@ services:
 
 volumes:
   mongodb_data:
+  mongodb_config:
+  mongodb_mongot:
   rabbitmq_data:
