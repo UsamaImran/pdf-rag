@@ -1,5 +1,4 @@
 import express, { type Express } from "express";
-import type { Router } from "express";
 import { createDocumentRoutes } from "./routes/document.routes.js";
 import { createSearchRoutes } from "./routes/search.routes.js";
 
