@@ -1,7 +1,7 @@
-import { gemini } from "../config/gemini.js";
+import { gemini, GEMINI_EMBEDDING_MODEL } from "../config/gemini.js";
 
 export class EmbeddingService {
-  private readonly model = "gemini-embedding-001";
+  private readonly model = GEMINI_EMBEDDING_MODEL;
 
   async embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) {

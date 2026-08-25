@@ -4,7 +4,7 @@ import {
   type RetrievedChunk,
 } from "./vectorSearch.service.js";
 import { ContextBuilderService } from "./contextBuilder.service.js";
-import { gemini } from "../config/gemini.js";
+import { gemini, GEMINI_TEXT_MODEL } from "../config/gemini.js";
 
 export interface AnswerResult {
   answer: string;
@@ -68,7 +68,7 @@ ANSWER:
 `;
 
     const result = await gemini.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: GEMINI_TEXT_MODEL,
       contents: prompt,
     });
 
