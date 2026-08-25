@@ -1,0 +1,61 @@
+services:
+  api:
+    build:
+      context: .
+      target: development
+
+    container_name: pdf-rag-api
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${PORT}
+      MONGO_URI: ${MONGO_URI}
+
+      STORJ_ENDPOINT: ${STORJ_ENDPOINT}
+      STORJ_ACCESS_KEY: ${STORJ_ACCESS_KEY}
+      STORJ_SECRET_KEY: ${STORJ_SECRET_KEY}
+      STORJ_BUCKET: ${STORJ_BUCKET}
+
+      RABBITMQ_URL: ${RABBITMQ_URL}
+
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  mongodb:
+    image: mongo:8
+
+    container_name: pdf-rag-mongodb
+
+    restart: unless-stopped
+
+    ports:
+      - "27017:27017"
+
+    volumes:
+      - mongodb_data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:4-management
+
+    container_name: pdf-rag-rabbitmq
+
+    restart: unless-stopped
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  mongodb_data:
+  rabbitmq_data:

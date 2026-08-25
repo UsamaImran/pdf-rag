@@ -1,0 +1,41 @@
+{
+  "name": "pdf-rag",
+  "version": "1.0.0",
+  "description": "PDF RAG is an end-to-end Retrieval-Augmented Generation system for processing and querying PDF documents. It handles PDF storage, text extraction, tokenization, token-aware chunking, Gemini embeddings, MongoDB vector search, and context-aware response generation.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UsamaImran/pdf-rag.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/UsamaImran/pdf-rag/issues"
+  },
+  "homepage": "https://github.com/UsamaImran/pdf-rag#readme",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1117.0",
+    "@google/genai": "^2.18.0",
+    "bpe-lite": "^0.5.2",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongoose": "^9.9.3",
+    "multer": "^2.2.0",
+    "pdf-parse": "^2.4.5",
+    "rabbitmq-common": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.3.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
