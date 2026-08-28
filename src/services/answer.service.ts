@@ -1,10 +1,8 @@
 import { EmbeddingService } from "./embedding.service.js";
-import {
-  VectorSearchService,
-  type RetrievedChunk,
-} from "./vectorSearch.service.js";
+import { type RetrievedChunk } from "./vectorSearch.service.js";
 import { ContextBuilderService } from "./contextBuilder.service.js";
 import { gemini, GEMINI_TEXT_MODEL } from "../config/gemini.js";
+import { HybridSearchService } from "./hybridSearch.service.js";
 
 export interface AnswerResult {
   answer: string;
@@ -13,17 +11,15 @@ export interface AnswerResult {
 
 export class AnswerService {
   private readonly embeddingService = new EmbeddingService();
-  private readonly vectorSearchService = new VectorSearchService();
+  private readonly hybridSearch = new HybridSearchService();
   private readonly contextBuilder = new ContextBuilderService();
 
   async answer(query: string): Promise<AnswerResult> {
-    // 1. Convert question into vector
     const queryEmbedding = await this.embeddingService.embedQuery(query);
 
-    // 2. Retrieve relevant chunks
-    const chunks = await this.vectorSearchService.search(queryEmbedding, 5);
+    // 1. Hybrid retrieval (vector + keyword fused)
+    const chunks = await this.hybridSearch.search(query, queryEmbedding, 5);
 
-    // 3. Build context
     const context = this.contextBuilder.build(chunks);
 
     if (!context.text) {
@@ -33,7 +29,6 @@ export class AnswerService {
       };
     }
 
-    // 4. Generate answer
     const answer = await this.generateAnswer(query, context.text);
 
     return {
