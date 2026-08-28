@@ -1,8 +1,8 @@
 # pdf-rag
 
-End-to-end **Retrieval-Augmented Generation (RAG)** system for PDF documents.
+End-to-end **Retrieval-Augmented Generation (RAG)** system for PDF documents with **hybrid search** (semantic + keyword).
 
-Upload PDFs → extract text → token-aware chunking → Gemini embeddings → MongoDB Atlas Vector Search → grounded answers via Gemini.
+Upload PDFs → extract text → token-aware chunking → Gemini embeddings → **MongoDB Atlas Hybrid Search** → grounded answers via Gemini.
 
 ---
 
@@ -14,9 +14,9 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
 - **Gemini embeddings** with correct task types:
   - `RETRIEVAL_DOCUMENT` for indexing
   - `RETRIEVAL_QUERY` for search
-- **MongoDB Atlas Vector Search** (cosine similarity, 3072 dimensions)
+- **Hybrid Retrieval** — combines **MongoDB Atlas Vector Search** (semantic similarity) with **Atlas Search** (Lucene-based keyword search) via **Reciprocal Rank Fusion (RRF)**
 - **Grounded Q&A** — answers are generated only from retrieved context
-- **Source citations** returned with every answer
+- **Source citations** with fusion scores returned with every answer
 - **Docker Compose** setup (API + MongoDB Atlas Local + RabbitMQ)
 
 ---
@@ -47,15 +47,46 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
                                       │  • status → completed       │
                                       └─────────────────────────────┘
 
-┌─────────────┐     POST /search      ┌─────────────┐
-│   Client    │ ───────────────────►  │ AnswerService│
-└─────────────┘                       └──────┬──────┘
-                                             │ 1. Embed query
-                                             │ 2. $vectorSearch (top-k)
-                                             │ 3. Build context
-                                             │ 4. Generate answer (Gemini)
-                                             ▼
-                                      { answer, sources }
+┌─────────────┐     POST /search      ┌─────────────────────────────┐
+│   Client    │ ───────────────────►  │        AnswerService        │
+└─────────────┘                       └─────────────┬───────────────┘
+                                                  │
+                                                  │ 1. Embed query
+                                                  │
+                                                  ▼
+                                       ┌──────────────────────┐
+                                       │   HybridSearchService │
+                                       │  ┌────────────────┐  │
+                                       │  │ Vector Search  │──┤──► $vectorSearch
+                                       │  │ (semantic)     │  │    (cosine, top-k)
+                                       │  └────────────────┘  │
+                                       │  ┌────────────────┐  │
+                                       │  │ Keyword Search │──┤──► $search
+                                       │  │ (Lucene)       │  │    (BM25, top-k)
+                                       │  └────────────────┘  │
+                                       │           │            │
+                                       │           ▼            │
+                                       │  ┌────────────────┐    │
+                                       │  │  RRF Fusion    │    │
+                                       │  │  (rank combine)│    │
+                                       │  └────────────────┘    │
+                                       └───────────┬────────────┘
+                                                   │
+                                                   ▼
+                                       ┌──────────────────────┐
+                                       │ ContextBuilderService │
+                                       │ • Deduplicate         │
+                                       │ • Sort by score       │
+                                       │ • Format + scores     │
+                                       └───────────┬──────────┘
+                                                   │
+                                                   ▼
+                                       ┌──────────────────────┐
+                                       │   Gemini Generate    │
+                                       └──────────────────────┘
+                                                   │
+                                                   ▼
+                                          { answer, sources }
 ```
 
 **Document status flow:** `uploaded` → `processing` → `completed` | `failed`
@@ -70,6 +101,7 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
 | HTTP             | Express 5                       |
 | LLM / Embeddings | Google Gemini (`@google/genai`) |
 | Vector DB        | MongoDB Atlas Vector Search     |
+| Full-Text Search | MongoDB Atlas Search (Lucene)   |
 | Object storage   | Storj (S3-compatible)           |
 | Message queue    | RabbitMQ                        |
 | PDF parsing      | `pdf-parse`                     |
@@ -227,7 +259,7 @@ Content-Type: application/json
       "index": 3,
       "text": "Chunk content...",
       "tokenCount": 742,
-      "score": 0.87
+      "score": 0.0312
     }
   ]
 }
@@ -266,21 +298,23 @@ src/
 │       └── documentUpload.producer.ts
 ├── models/
 │   ├── document.model.ts           # Document schema + status
-│   └── document.chunk.model.ts     # Chunks + embeddings + vector index
+│   └── document.chunk.model.ts     # Chunks + embeddings + vector + text index
 ├── routes/
 │   ├── document.routes.ts
 │   └── search.routes.ts
 └── services/
     ├── answer.service.ts           # Orchestrates retrieval + generation
-    ├── contextBuilder.service.ts   # Formats retrieved chunks
+    ├── contextBuilder.service.ts   # Formats + dedup + ranks retrieved chunks
     ├── document.service.ts         # Create document + publish event
     ├── documentChunk.service.ts    # Chunking + save
     ├── documentProcessor.service.ts# Full ingestion pipeline
     ├── embedding.service.ts        # Document & query embeddings
     ├── fileService.ts              # Upload / download / delete
+    ├── hybridSearch.service.ts     # RRF fusion of vector + keyword results
+    ├── keywordSearch.service.ts    # Atlas Search ($search) aggregation
     ├── pdfTextExtractor.service.ts
     ├── tokenizer.service.ts
-    └── vectorSearch.service.ts     # $vectorSearch aggregation
+    └── vectorSearch.service.ts     # Atlas Vector Search ($vectorSearch) aggregation
 ```
 
 ---
@@ -297,13 +331,20 @@ src/
    - Embeds all chunks with Gemini (`RETRIEVAL_DOCUMENT`)
    - Inserts chunks + vectors into MongoDB
    - Marks document `completed` (or `failed` on error)
-4. **Search** — Query is embedded (`RETRIEVAL_QUERY`), top-k chunks are retrieved via Atlas Vector Search, context is built, and Gemini generates a grounded answer.
+4. **Search** — Query is embedded (`RETRIEVAL_QUERY`), then hybrid retrieval runs:
+   - **Vector search** finds semantically similar chunks via `$vectorSearch`
+   - **Keyword search** finds exact term matches via `$search` (Lucene/BM25)
+   - **RRF fusion** combines both ranked lists into a single relevance-ordered result set
+   - `ContextBuilderService` deduplicates, sorts by fusion score, and formats context with provenance
+   - Gemini generates a grounded answer from the fused context
 
 ---
 
-## Vector Search Index
+## Search Indexes
 
-The index is defined on the `DocumentChunk` collection:
+The system uses **two indexes** on the `DocumentChunk` collection:
+
+### 1. Vector Search Index
 
 | Setting    | Value                          |
 | ---------- | ------------------------------ |
@@ -313,7 +354,30 @@ The index is defined on the `DocumentChunk` collection:
 | Dimensions | `3072`                         |
 | Similarity | `cosine`                       |
 
-It is created when the chunk model is loaded. For production, prefer creating indexes via a migration or bootstrap step rather than a module side-effect.
+### 2. Atlas Search Index (Keyword)
+
+| Setting  | Value                        |
+| -------- | ---------------------------- |
+| Name     | `document_chunks_text_index` |
+| Type     | `search`                     |
+| Path     | `text`                       |
+| Analyzer | `lucene.standard`            |
+
+> **Note:** For production, prefer creating indexes via a migration or bootstrap step rather than a module side-effect.
+
+---
+
+## Why Hybrid Search?
+
+| Capability               | Vector Only     | Hybrid (Vector + Keyword) |
+| ------------------------ | --------------- | ------------------------- |
+| Synonyms / paraphrases   | ✅ Excellent    | ✅ Excellent (via vector) |
+| Exact phrases / acronyms | ❌ Weak         | ✅ Strong (via keyword)   |
+| Rare technical terms     | ❌ Often missed | ✅ Found by keyword       |
+| Numbers / IDs / codes    | ❌ Unreliable   | ✅ Exact match possible   |
+| Overall recall           | Moderate        | **High**                  |
+
+**Reciprocal Rank Fusion (RRF)** ensures the best of both worlds: semantic understanding for conceptual queries, and lexical precision for specific terminology.
 
 ---
 
