@@ -16,7 +16,8 @@ export class DocumentProcessorService {
     const document = await DocumentModel.findById(documentId);
 
     if (!document) {
-      throw new Error(`Document not found: ${documentId}`);
+      console.warn(`Document not found, skipping: ${documentId}`);
+      return;
     }
 
     try {
