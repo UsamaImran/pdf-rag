@@ -53,3 +53,20 @@ DocumentChunkModel.collection.createSearchIndex({
     ],
   },
 });
+
+DocumentChunkModel.collection.createSearchIndex({
+  name: "document_chunks_text_index",
+  type: "search",
+  definition: {
+    mappings: {
+      dynamic: false,
+      fields: {
+        text: {
+          type: "string",
+          analyzer: "lucene.standard",
+        },
+        documentId: { type: "string" },
+      },
+    },
+  },
+});
