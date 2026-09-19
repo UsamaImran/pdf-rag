@@ -29,7 +29,7 @@
     "mongoose": "^9.9.3",
     "multer": "^2.2.0",
     "pdf-parse": "^2.4.5",
-    "rabbitmq-common": "^5.2.0"
+    "rabbitmq-common": "^6.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

@@ -19,4 +19,7 @@ export class DocumentUploadConsumer extends Consumer<DocumentUploadedEvent> {
   }
 }
 
-export const documentUploadConsumer = new DocumentUploadConsumer(rabbitmqUrl);
+export const documentUploadConsumer = new DocumentUploadConsumer(rabbitmqUrl, {
+  useDLQ: true,
+  maxRetries: 2,
+});

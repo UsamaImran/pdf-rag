@@ -1,5 +1,9 @@
 import { documentUploadConsumer } from "./consumers/documentConsumer.js";
 
 export async function startConsumers(): Promise<void> {
-  await Promise.all([documentUploadConsumer.consume("document.uploaded")]);
+  try {
+    await Promise.all([documentUploadConsumer.consume("document.uploaded")]);
+  } catch (error) {
+    console.log({ error });
+  }
 }
