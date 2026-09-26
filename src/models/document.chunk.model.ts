@@ -47,7 +47,7 @@ DocumentChunkModel.collection.createSearchIndex({
       {
         type: "vector",
         path: "embedding",
-        numDimensions: 3072,
+        numDimensions: 2560,
         similarity: "cosine",
       },
     ],
