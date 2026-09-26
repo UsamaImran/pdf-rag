@@ -2,7 +2,7 @@
 
 End-to-end **Retrieval-Augmented Generation (RAG)** system for PDF documents with **hybrid search** (semantic + keyword).
 
-Upload PDFs → extract text → token-aware chunking → Gemini embeddings → **MongoDB Atlas Hybrid Search** → grounded answers via Gemini.
+Upload PDFs → extract text → token-aware chunking → local Qwen embeddings → **MongoDB Atlas Hybrid Search** → grounded answers via Gemini.
 
 ---
 
@@ -11,7 +11,7 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
 - **PDF upload** with validation (PDF only, 50 MB limit)
 - **Async processing** via RabbitMQ (upload returns immediately)
 - **Token-aware chunking** (Gemini-compatible BPE, 800 tokens + 100 overlap)
-- **Gemini embeddings** with correct task types:
+- **local Qwen3-Embedding-4B embeddings** with correct task types:
   - `RETRIEVAL_DOCUMENT` for indexing
   - `RETRIEVAL_QUERY` for search
 - **Hybrid Retrieval** — combines **MongoDB Atlas Vector Search** (semantic similarity) with **Atlas Search** (Lucene-based keyword search) via **Reciprocal Rank Fusion (RRF)**
@@ -42,7 +42,7 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
                                       │  • Download PDF             │
                                       │  • Extract text             │
                                       │  • Token-aware chunk        │
-                                      │  • Embed (Gemini)           │
+                                      │  • Embed (local Qwen)       │
                                       │  • Save chunks + vectors    │
                                       │  • status → completed       │
                                       └─────────────────────────────┘
@@ -99,7 +99,7 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
 | ---------------- | ------------------------------- |
 | Runtime          | Node.js 22, TypeScript          |
 | HTTP             | Express 5                       |
-| LLM / Embeddings | Google Gemini (`@google/genai`) |
+| LLM | Google Gemini (`@google/genai`) |\n| Embeddings | Qwen3-Embedding-4B via Ollama (`ollama`) |
 | Vector DB        | MongoDB Atlas Vector Search     |
 | Full-Text Search | MongoDB Atlas Search (Lucene)   |
 | Object storage   | Storj (S3-compatible)           |
@@ -113,7 +113,7 @@ Upload PDFs → extract text → token-aware chunking → Gemini embeddings → 
 
 - Node.js 22+
 - Docker & Docker Compose
-- [Google AI API key](https://aistudio.google.com/apikey) (Gemini)
+- Ollama installed and running locally\n- Qwen3-Embedding-4B pulled locally (`ollama pull qwen3-embedding:4b`)\n- [Google AI API key](https://aistudio.google.com/apikey) (Gemini generation only)
 - Storj account (or any S3-compatible storage)
 
 ---
@@ -351,7 +351,7 @@ The system uses **two indexes** on the `DocumentChunk` collection:
 | Name       | `document_chunks_vector_index` |
 | Type       | `vectorSearch`                 |
 | Path       | `embedding`                    |
-| Dimensions | `3072`                         |
+| Dimensions | `2560`                         |
 | Similarity | `cosine`                       |
 
 ### 2. Atlas Search Index (Keyword)
