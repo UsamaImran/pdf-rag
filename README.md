@@ -348,7 +348,7 @@ The system uses **two indexes** on the `DocumentChunk` collection:
 
 | Setting    | Value                          |
 | ---------- | ------------------------------ |
-| Name       | `document_chunks_vector_index` |
+| Name       | `document_chunks_vector_index_2560` |
 | Type       | `vectorSearch`                 |
 | Path       | `embedding`                    |
 | Dimensions | `2560`                         |
