@@ -1,7 +1,7 @@
 {
   "name": "pdf-rag",
   "version": "1.0.0",
-  "description": "PDF RAG is an end-to-end Retrieval-Augmented Generation system for processing and querying PDF documents. It handles PDF storage, text extraction, tokenization, token-aware chunking, Gemini embeddings, MongoDB vector search, and context-aware response generation.",
+  "description": "PDF RAG is an end-to-end Retrieval-Augmented Generation system for processing and querying PDF documents. It handles PDF storage, text extraction, tokenization, token-aware chunking, local embeddings, MongoDB vector search, and context-aware response generation.",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -28,6 +28,7 @@
     "express": "^5.2.1",
     "mongoose": "^9.9.3",
     "multer": "^2.2.0",
+    "ollama": "^0.6.3",
     "pdf-parse": "^2.4.5",
     "rabbitmq-common": "^6.0.0"
   },
