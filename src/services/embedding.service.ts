@@ -16,6 +16,7 @@ async function getExtractor(): Promise<FeatureExtractionPipeline> {
   extractorPromise ??= pipeline("feature-extraction", LOCAL_EMBEDDING_MODEL, {
     dtype: "fp32",
     device: "cpu",
+    use_external_data_format: true,
   });
 
   return extractorPromise;
