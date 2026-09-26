@@ -28,9 +28,9 @@
     "express": "^5.2.1",
     "mongoose": "^9.9.3",
     "multer": "^2.2.0",
-    "ollama": "^0.6.3",
     "pdf-parse": "^2.4.5",
-    "rabbitmq-common": "^6.0.0"
+    "rabbitmq-common": "^6.0.0",
+    "@huggingface/transformers": "^4.3.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
