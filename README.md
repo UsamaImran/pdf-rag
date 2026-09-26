@@ -2,7 +2,7 @@
 
 End-to-end **Retrieval-Augmented Generation (RAG)** system for PDF documents with **hybrid search** (semantic + keyword).
 
-Upload PDFs → extract text → token-aware chunking → local Qwen embeddings → **MongoDB Atlas Hybrid Search** → grounded answers via Gemini.
+Upload PDFs → extract text → token-aware chunking → local Qwen embeddings via Transformers.js → **MongoDB Atlas Hybrid Search** → grounded answers via Gemini.
 
 ---
 
@@ -11,7 +11,7 @@ Upload PDFs → extract text → token-aware chunking → local Qwen embeddings 
 - **PDF upload** with validation (PDF only, 50 MB limit)
 - **Async processing** via RabbitMQ (upload returns immediately)
 - **Token-aware chunking** (Gemini-compatible BPE, 800 tokens + 100 overlap)
-- **local Qwen3-Embedding-4B embeddings** with correct task types:
+- **local Qwen3-Embedding-4B embeddings via Transformers.js** with correct task types:
   - `RETRIEVAL_DOCUMENT` for indexing
   - `RETRIEVAL_QUERY` for search
 - **Hybrid Retrieval** — combines **MongoDB Atlas Vector Search** (semantic similarity) with **Atlas Search** (Lucene-based keyword search) via **Reciprocal Rank Fusion (RRF)**
@@ -99,7 +99,7 @@ Upload PDFs → extract text → token-aware chunking → local Qwen embeddings 
 | ---------------- | ------------------------------- |
 | Runtime          | Node.js 22, TypeScript          |
 | HTTP             | Express 5                       |
-| LLM | Google Gemini (`@google/genai`) |\n| Embeddings | Qwen3-Embedding-4B via Ollama (`ollama`) |
+| LLM | Google Gemini (`@google/genai`) |\n| Embeddings | Qwen3-Embedding-4B via `@huggingface/transformers` |
 | Vector DB        | MongoDB Atlas Vector Search     |
 | Full-Text Search | MongoDB Atlas Search (Lucene)   |
 | Object storage   | Storj (S3-compatible)           |
@@ -113,7 +113,7 @@ Upload PDFs → extract text → token-aware chunking → local Qwen embeddings 
 
 - Node.js 22+
 - Docker & Docker Compose
-- Ollama installed and running locally\n- Qwen3-Embedding-4B pulled locally (`ollama pull qwen3-embedding:4b`)\n- [Google AI API key](https://aistudio.google.com/apikey) (Gemini generation only)
+- [Google AI API key](https://aistudio.google.com/apikey) (Gemini generation only)
 - Storj account (or any S3-compatible storage)
 
 ---
@@ -328,10 +328,10 @@ src/
    - Downloads the PDF
    - Extracts text
    - Splits into overlapping token-aware chunks (800 / 100)
-   - Embeds all chunks with Gemini (`RETRIEVAL_DOCUMENT`)
+   - Embeds all chunks locally with Qwen3-Embedding-4B
    - Inserts chunks + vectors into MongoDB
    - Marks document `completed` (or `failed` on error)
-4. **Search** — Query is embedded (`RETRIEVAL_QUERY`), then hybrid retrieval runs:
+4. **Search** — Query is embedded locally with Qwen3-Embedding-4B, then hybrid retrieval runs:
    - **Vector search** finds semantically similar chunks via `$vectorSearch`
    - **Keyword search** finds exact term matches via `$search` (Lucene/BM25)
    - **RRF fusion** combines both ranked lists into a single relevance-ordered result set
@@ -384,3 +384,10 @@ The system uses **two indexes** on the `DocumentChunk` collection:
 ## License
 
 [MIT](LICENSE)
+
+
+### Local embeddings
+
+The embedding model runs in-process through `@huggingface/transformers`; there is no Ollama server and no embedding API call. The model is downloaded/cached by Transformers.js on first use. To run with no network access, pre-cache the model and disable remote model loading.
+
+The selected Qwen3-Embedding-4B ONNX model produces **2560-dimensional** vectors, which is the dimension used by the MongoDB vector index.
