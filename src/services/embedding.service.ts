@@ -1,15 +1,39 @@
-import { Ollama } from "ollama";
+import { env, pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
 
 const LOCAL_EMBEDDING_MODEL =
-  process.env.LOCAL_EMBEDDING_MODEL ?? "qwen3-embedding:4b";
+  process.env.LOCAL_EMBEDDING_MODEL ?? "dssjon/Qwen3-Embedding-4B-ONNX";
+
 const EMBEDDING_DIMENSIONS = 2560;
 const EMBEDDING_BATCH_SIZE = 8;
 const EMBEDDING_TASK =
   "Given a user query, retrieve relevant passages from the provided documents that answer the query";
 
-const ollama = new Ollama({
-  host: process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434",
-});
+env.allowLocalModels = true;
+
+let extractorPromise: Promise<FeatureExtractionPipeline> | undefined;
+
+async function getExtractor(): Promise<FeatureExtractionPipeline> {
+  extractorPromise ??= pipeline("feature-extraction", LOCAL_EMBEDDING_MODEL, {
+    dtype: "fp32",
+    device: "cpu",
+  });
+
+  return extractorPromise;
+}
+
+function validateEmbeddings(embeddings: number[][]): number[][] {
+  if (
+    embeddings.some(
+      (embedding) => embedding.length !== EMBEDDING_DIMENSIONS,
+    )
+  ) {
+    throw new Error(
+      `Unexpected embedding dimensions. Expected ${EMBEDDING_DIMENSIONS} dimensions from ${LOCAL_EMBEDDING_MODEL}.`,
+    );
+  }
+
+  return embeddings;
+}
 
 export class EmbeddingService {
   async embed(texts: string[]): Promise<number[][]> {
@@ -17,31 +41,29 @@ export class EmbeddingService {
       return [];
     }
 
+    const extractor = await getExtractor();
     const embeddings: number[][] = [];
 
     for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
       const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE);
 
-      const response = await ollama.embed({
-        model: LOCAL_EMBEDDING_MODEL,
-        input: batch,
+      const output = await extractor(batch, {
+        pooling: "last_token",
+        normalize: true,
       });
 
-      if (
-        response.embeddings.length !== batch.length ||
-        response.embeddings.some(
-          (embedding) => embedding.length !== EMBEDDING_DIMENSIONS,
-        )
-      ) {
+      const batchEmbeddings = output.tolist() as number[][];
+
+      if (batchEmbeddings.length !== batch.length) {
         throw new Error(
-          `Unexpected document embedding dimensions. Expected ${EMBEDDING_DIMENSIONS} dimensions per vector from ${LOCAL_EMBEDDING_MODEL}.`,
+          `Embedding count mismatch. Expected ${batch.length}, got ${batchEmbeddings.length}.`,
         );
       }
 
-      embeddings.push(...response.embeddings);
+      embeddings.push(...batchEmbeddings);
     }
 
-    return embeddings;
+    return validateEmbeddings(embeddings);
   }
 
   async embedQuery(text: string): Promise<number[]> {
@@ -49,23 +71,17 @@ export class EmbeddingService {
       throw new Error("Query text is empty");
     }
 
-    const response = await ollama.embed({
-      model: LOCAL_EMBEDDING_MODEL,
-      input: `Instruct: ${EMBEDDING_TASK}\n Query:${text}`,
-    });
+    const extractor = await getExtractor();
 
-    const embedding = response.embeddings[0];
+    const output = await extractor(
+      `Instruct: ${EMBEDDING_TASK}\nQuery:${text}`,
+      {
+        pooling: "last_token",
+        normalize: true,
+      },
+    );
 
-    if (!embedding?.length) {
-      throw new Error("Failed to generate local query embedding");
-    }
-
-    if (embedding.length !== EMBEDDING_DIMENSIONS) {
-      throw new Error(
-        `Unexpected query embedding dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedding.length} from ${LOCAL_EMBEDDING_MODEL}.`,
-      );
-    }
-
-    return embedding;
+    const embedding = output.tolist() as number[];
+    return validateEmbeddings([embedding])[0];
   }
 }
