@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { DocumentChunkModel } from "../models/document.chunk.model.js";
 
 export interface KeywordRetrievedChunk {
@@ -9,23 +10,43 @@ export interface KeywordRetrievedChunk {
 }
 
 export class KeywordSearchService {
-  private readonly indexName = "document_chunks_text_index";
+  private readonly indexName = "document_chunks_text_index_v3";
 
-  async search(query: string, limit = 5): Promise<KeywordRetrievedChunk[]> {
-    if (!query.trim()) {
+  async search(
+    query: string,
+    completedDocumentIds: Types.ObjectId[],
+    limit = 5,
+  ): Promise<KeywordRetrievedChunk[]> {
+    if (!query.trim() || completedDocumentIds.length === 0) {
       return [];
     }
 
-    console.log(`[KeywordSearch] Searching for: "${query}"`);
+    console.log(
+      `[KeywordSearch] Searching for "${query}" across ${completedDocumentIds.length} completed documents`,
+    );
 
     const results = await DocumentChunkModel.aggregate<KeywordRetrievedChunk>([
       {
         $search: {
           index: this.indexName,
-          text: {
-            query,
-            path: "text",
-            },
+          compound: {
+            must: [
+              {
+                text: {
+                  query,
+                  path: "text",
+                },
+              },
+            ],
+            filter: [
+              {
+                in: {
+                  path: "documentId",
+                  value: completedDocumentIds,
+                },
+              },
+            ],
+          },
         },
       },
       { $limit: limit },

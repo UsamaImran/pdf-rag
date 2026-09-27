@@ -1,3 +1,4 @@
+import { DocumentModel } from "../models/document.model.js";
 import {
   VectorSearchService,
   type RetrievedChunk,
@@ -32,14 +33,35 @@ export class HybridSearchService {
     queryEmbedding: number[],
     limit = 5,
   ): Promise<HybridChunk[]> {
+    // Document.status is the single source of truth. Resolve the completed
+    // document IDs before searching chunks so no chunk from another document
+    // can enter either retrieval path.
+    const completedDocuments = await DocumentModel.find({
+      status: "completed",
+    })
+      .select("_id")
+      .lean();
+
+    const completedDocumentIds = completedDocuments.map(
+      (document) => document._id,
+    );
+
+    if (completedDocumentIds.length === 0) {
+      return [];
+    }
+
     // Retrieve a larger candidate pool from each retriever, then
     // let RRF rerank the candidates down to the requested final limit.
     const candidateLimit = Math.max(limit * 10, 50);
 
-    // Run both in parallel
+    // Run both in parallel using only completed documents.
     const [vectorResults, keywordResults] = await Promise.all([
-      this.vectorSearch.search(queryEmbedding, candidateLimit),
-      this.keywordSearch.search(query, candidateLimit),
+      this.vectorSearch.search(
+        queryEmbedding,
+        completedDocumentIds,
+        candidateLimit,
+      ),
+      this.keywordSearch.search(query, completedDocumentIds, candidateLimit),
     ]);
 
     // Combine using Reciprocal Rank Fusion

@@ -78,11 +78,10 @@ export class DocumentProcessorService {
 
       console.log(`Stored ${chunks.length} chunks for document ${documentId}`);
 
-      // 8. Mark document as completed
+      // 8. Mark document as completed only after all chunks and embeddings are stored.
       await DocumentModel.findByIdAndUpdate(documentId, {
         status: "completed",
       });
-
       console.log(`Document processing completed: ${documentId}`);
     } catch (error) {
       await DocumentModel.findByIdAndUpdate(documentId, {

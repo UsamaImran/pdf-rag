@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { DocumentChunkModel } from "../models/document.chunk.model.js";
 
 export interface RetrievedChunk {
@@ -9,9 +10,13 @@ export interface RetrievedChunk {
 }
 
 export class VectorSearchService {
-  private readonly indexName = "document_chunks_vector_index_768";
+  private readonly indexName = "document_chunks_vector_index_768_v3";
 
-  async search(queryEmbedding: number[], limit = 5): Promise<RetrievedChunk[]> {
+  async search(
+    queryEmbedding: number[],
+    completedDocumentIds: Types.ObjectId[],
+    limit = 5,
+  ): Promise<RetrievedChunk[]> {
     if (queryEmbedding.length === 0) {
       throw new Error("Query embedding is empty");
     }
@@ -20,8 +25,12 @@ export class VectorSearchService {
       throw new Error("Search limit must be greater than 0");
     }
 
+    if (completedDocumentIds.length === 0) {
+      return [];
+    }
+
     console.log(
-      `[VectorSearch] Searching with ${queryEmbedding.length} dimensions`,
+      `[VectorSearch] Searching with ${queryEmbedding.length} dimensions across ${completedDocumentIds.length} completed documents`,
     );
 
     const results = await DocumentChunkModel.aggregate<RetrievedChunk>([
@@ -30,6 +39,9 @@ export class VectorSearchService {
           index: this.indexName,
           path: "embedding",
           queryVector: queryEmbedding,
+          filter: {
+            documentId: { $in: completedDocumentIds },
+          },
           numCandidates: Math.max(limit * 10, 50),
           limit,
         },
