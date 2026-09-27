@@ -1,20 +1,40 @@
 import { EmbeddingService } from "./embedding.service.js";
 import { type RetrievedChunk } from "./vectorSearch.service.js";
 import { ContextBuilderService } from "./contextBuilder.service.js";
-import { gemini, GEMINI_TEXT_MODEL } from "../config/gemini.js";
 import { HybridSearchService } from "./hybridSearch.service.js";
+import {
+  EvaluationService,
+  type EvaluationResult,
+} from "./evaluation.service.js";
+import { LLMService } from "./llm.service.js";
+
+export interface AnswerOptions {
+  feedbackLoop?: boolean;
+}
+
+export interface PreviousAttempt {
+  answer: string;
+  evaluation: EvaluationResult;
+}
 
 export interface AnswerResult {
   answer: string;
   sources: RetrievedChunk[];
+  evaluation: EvaluationResult;
+  previousAttempts?: PreviousAttempt[];
 }
 
 export class AnswerService {
   private readonly embeddingService = new EmbeddingService();
   private readonly hybridSearch = new HybridSearchService();
   private readonly contextBuilder = new ContextBuilderService();
+  private readonly generationLLM = new LLMService();
+  private readonly evaluationService = new EvaluationService();
 
-  async answer(query: string): Promise<AnswerResult> {
+  async answer(
+    query: string,
+    options: AnswerOptions = {},
+  ): Promise<AnswerResult> {
     const queryEmbedding = await this.embeddingService.embedQuery(query);
 
     // 1. Hybrid retrieval (vector + keyword fused)
@@ -23,17 +43,52 @@ export class AnswerService {
     const context = this.contextBuilder.build(chunks);
 
     if (!context.text) {
-      return {
-        answer: "I couldn't find relevant information in the documents.",
-        sources: [],
-      };
+      throw new Error("No relevant context found for evaluation");
     }
 
-    const answer = await this.generateAnswer(query, context.text);
+    // 2. Generate the initial answer.
+    let answer = await this.generateAnswer(query, context.text);
+
+    // 3. Every generated answer is evaluated, including revisions.
+    let evaluation = await this.evaluationService.evaluate({
+      query,
+      context: context.text,
+      answer,
+    });
+
+    const previousAttempts: PreviousAttempt[] = [];
+    const maxAttempts = options.feedbackLoop ? 2 : 1;
+
+    // 4. If feedbackLoop is enabled, allow one revision after the initial attempt.
+    for (let attempt = 1; attempt < maxAttempts; attempt++) {
+      if (evaluation.verdict === "pass") {
+        break;
+      }
+
+      previousAttempts.push({
+        answer,
+        evaluation,
+      });
+
+      answer = await this.generateRevision({
+        query,
+        context: context.text,
+        previousAnswer: answer,
+        evaluation,
+      });
+
+      evaluation = await this.evaluationService.evaluate({
+        query,
+        context: context.text,
+        answer,
+      });
+    }
 
     return {
       answer,
       sources: context.sources,
+      evaluation,
+      ...(previousAttempts.length > 0 ? { previousAttempts } : {}),
     };
   }
 
@@ -60,17 +115,57 @@ ${query}
 ANSWER:
 `;
 
-    const result = await gemini.models.generateContent({
-      model: GEMINI_TEXT_MODEL,
-      contents: prompt,
-    });
+    return this.generationLLM.generate(prompt);
+  }
 
-    const answer = result.text?.trim();
+  private async generateRevision({
+    query,
+    context,
+    previousAnswer,
+    evaluation,
+  }: {
+    query: string;
+    context: string;
+    previousAnswer: string;
+    evaluation: EvaluationResult;
+  }): Promise<string> {
+    const prompt = `
+You are revising an answer for a Retrieval-Augmented Generation system.
 
-    if (!answer) {
-      throw new Error("Gemini returned an empty answer");
-    }
+Use ONLY the information contained in the context below.
 
-    return answer;
+The previous answer was evaluated and needs revision.
+Use the evaluator feedback to correct the answer.
+
+Do not introduce information that is not supported by the context.
+Preserve correct information from the previous answer.
+Address the identified issues directly.
+Return ONLY the revised answer. Do not mention the evaluation, revision process, or previous answer.
+
+QUESTION:
+${query}
+
+CONTEXT:
+${context}
+
+PREVIOUS ANSWER:
+${previousAnswer}
+
+EVALUATION FEEDBACK:
+Verdict: ${evaluation.verdict}
+Faithfulness: ${evaluation.faithfulness}/5
+Relevance: ${evaluation.relevance}/5
+Completeness: ${evaluation.completeness}/5
+Context sufficiency: ${evaluation.contextSufficiency}/5
+Issues:
+${evaluation.issues.map((issue) => `- [${issue.severity}] ${issue.type}: ${issue.description}`).join("\n")}
+
+Evaluator reasoning:
+${evaluation.reasoning}
+
+REVISED ANSWER:
+`;
+
+    return this.generationLLM.generate(prompt);
   }
 }

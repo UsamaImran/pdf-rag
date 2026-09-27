@@ -6,7 +6,7 @@ export class SearchController {
 
   search = async (req: Request, res: Response) => {
     try {
-      const { query } = req.body;
+      const { query, feedbackLoop = false } = req.body;
 
       if (!query || typeof query !== "string") {
         return res.status(400).json({
@@ -14,7 +14,15 @@ export class SearchController {
         });
       }
 
-      const result = await this.answerService.answer(query);
+      if (typeof feedbackLoop !== "boolean") {
+        return res.status(400).json({
+          message: "feedbackLoop must be a boolean",
+        });
+      }
+
+      const result = await this.answerService.answer(query, {
+        feedbackLoop,
+      });
 
       return res.status(200).json(result);
     } catch (error) {
