@@ -32,10 +32,14 @@ export class HybridSearchService {
     queryEmbedding: number[],
     limit = 5,
   ): Promise<HybridChunk[]> {
+    // Retrieve a larger candidate pool from each retriever, then
+    // let RRF rerank the candidates down to the requested final limit.
+    const candidateLimit = Math.max(limit * 10, 50);
+
     // Run both in parallel
     const [vectorResults, keywordResults] = await Promise.all([
-      this.vectorSearch.search(queryEmbedding, limit * 2),
-      this.keywordSearch.search(query, limit * 2),
+      this.vectorSearch.search(queryEmbedding, candidateLimit),
+      this.keywordSearch.search(query, candidateLimit),
     ]);
 
     // Combine using Reciprocal Rank Fusion
