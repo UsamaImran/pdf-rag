@@ -9,7 +9,7 @@ export interface KeywordRetrievedChunk {
 }
 
 export class KeywordSearchService {
-  private readonly indexName = "document_chunks_text_index";
+  private readonly indexName = "document_chunks_text_index_v2";
 
   async search(query: string, limit = 5): Promise<KeywordRetrievedChunk[]> {
     if (!query.trim()) {
@@ -22,10 +22,24 @@ export class KeywordSearchService {
       {
         $search: {
           index: this.indexName,
-          text: {
-            query,
-            path: "text",
-            },
+          compound: {
+            must: [
+              {
+                text: {
+                  query,
+                  path: "text",
+                },
+              },
+            ],
+            filter: [
+              {
+                equals: {
+                  path: "documentStatus",
+                  value: "completed",
+                },
+              },
+            ],
+          },
         },
       },
       { $limit: limit },
