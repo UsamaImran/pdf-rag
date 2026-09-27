@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["dssjon", "huggingface", "ONNX", "Qwen", "tolist"]
+  "cSpell.words": [
+    "dssjon",
+    "fastembed",
+    "huggingface",
+    "ONNX",
+    "Qwen",
+    "tolist"
+  ]
 }
