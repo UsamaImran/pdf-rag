@@ -9,7 +9,7 @@ export interface RetrievedChunk {
 }
 
 export class VectorSearchService {
-  private readonly indexName = "document_chunks_vector_index_768";
+  private readonly indexName = "document_chunks_vector_index_768_v2";
 
   async search(queryEmbedding: number[], limit = 5): Promise<RetrievedChunk[]> {
     if (queryEmbedding.length === 0) {
@@ -30,6 +30,9 @@ export class VectorSearchService {
           index: this.indexName,
           path: "embedding",
           queryVector: queryEmbedding,
+          filter: {
+            documentStatus: "completed",
+          },
           numCandidates: Math.max(limit * 10, 50),
           limit,
         },
