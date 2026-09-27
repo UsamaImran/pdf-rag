@@ -27,6 +27,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mongoose": "^9.9.3",
+    "zod": "^4.1.11",
     "multer": "^2.2.0",
     "pdf-parse": "^2.4.5",
     "rabbitmq-common": "^6.0.0",
