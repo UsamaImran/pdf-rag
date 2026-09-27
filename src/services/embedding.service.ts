@@ -33,9 +33,7 @@ export class EmbeddingService {
     const model = await getEmbeddingModel();
     const embeddings: number[][] = [];
 
-    const batches = model.passageEmbed(texts, EMBEDDING_BATCH_SIZE);
-
-    for await (const batch of batches) {
+    for await (const batch of model.passageEmbed(texts, EMBEDDING_BATCH_SIZE)) {
       embeddings.push(...batch);
     }
 
@@ -54,8 +52,6 @@ export class EmbeddingService {
     }
 
     const model = await getEmbeddingModel();
-    const embedding = await model.queryEmbed(text);
-
-    return validateEmbedding(embedding);
+    return validateEmbedding(await model.queryEmbed(text));
   }
 }
