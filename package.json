@@ -30,7 +30,7 @@
     "multer": "^2.2.0",
     "pdf-parse": "^2.4.5",
     "rabbitmq-common": "^6.0.0",
-    "@huggingface/transformers": "^4.3.0"
+    "fastembed": "^3.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
