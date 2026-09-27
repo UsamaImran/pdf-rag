@@ -78,13 +78,13 @@ export class DocumentProcessorService {
 
       console.log(`Stored ${chunks.length} chunks for document ${documentId}`);
 
-      // 8. Mark chunks as searchable before marking the document completed.
-      await this.chunkService.markCompleted(documentId);
-
-      // 9. Mark document as completed
+      // 8. Mark document as completed only after all chunks and embeddings are stored.
       await DocumentModel.findByIdAndUpdate(documentId, {
         status: "completed",
       });
+
+      // 9. Mark chunks as searchable after document completion.
+      await this.chunkService.markCompleted(documentId);
 
       console.log(`Document processing completed: ${documentId}`);
     } catch (error) {
