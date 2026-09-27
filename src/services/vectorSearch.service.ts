@@ -9,7 +9,7 @@ export interface RetrievedChunk {
 }
 
 export class VectorSearchService {
-  private readonly indexName = "document_chunks_vector_index_2560";
+  private readonly indexName = "document_chunks_vector_index_768";
 
   async search(queryEmbedding: number[], limit = 5): Promise<RetrievedChunk[]> {
     if (queryEmbedding.length === 0) {
