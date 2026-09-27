@@ -1,22 +1,29 @@
+import { z } from "zod";
 import { LLMService } from "./llm.service.js";
 
-export type EvaluationVerdict = "pass" | "needs_revision";
+const evaluationIssueSchema = z.object({
+  type: z.enum([
+    "unsupported_claim",
+    "incorrect_claim",
+    "missing_information",
+    "irrelevant_content",
+  ]),
+  severity: z.enum(["low", "medium", "high"]),
+  description: z.string(),
+});
 
-export interface EvaluationIssue {
-  type: "unsupported_claim" | "incorrect_claim" | "missing_information" | "irrelevant_content";
-  severity: "low" | "medium" | "high";
-  description: string;
-}
+const evaluationResultSchema = z.object({
+  verdict: z.enum(["pass", "needs_revision"]),
+  faithfulness: z.number().int().min(1).max(5),
+  relevance: z.number().int().min(1).max(5),
+  completeness: z.number().int().min(1).max(5),
+  contextSufficiency: z.number().int().min(1).max(5),
+  issues: z.array(evaluationIssueSchema),
+  reasoning: z.string(),
+});
 
-export interface EvaluationResult {
-  verdict: EvaluationVerdict;
-  faithfulness: number;
-  relevance: number;
-  completeness: number;
-  contextSufficiency: number;
-  issues: EvaluationIssue[];
-  reasoning: string;
-}
+export type EvaluationIssue = z.infer<typeof evaluationIssueSchema>;
+export type EvaluationResult = z.infer<typeof evaluationResultSchema>;
 
 export interface EvaluationInput {
   query: string;
@@ -27,16 +34,20 @@ export interface EvaluationInput {
 export class EvaluationService {
   private readonly evaluationLLM = new LLMService();
 
-  async evaluate(input: EvaluationInput): Promise<EvaluationResult> {
-    if (!input.query.trim()) {
+  async evaluate({
+    query,
+    context,
+    answer,
+  }: EvaluationInput): Promise<EvaluationResult> {
+    if (!query.trim()) {
       throw new Error("Evaluation query is empty");
     }
 
-    if (!input.context.trim()) {
+    if (!context.trim()) {
       throw new Error("Evaluation context is empty");
     }
 
-    if (!input.answer.trim()) {
+    if (!answer.trim()) {
       throw new Error("Evaluation answer is empty");
     }
 
@@ -81,35 +92,35 @@ Return ONLY valid JSON matching this structure:
 }
 
 QUESTION:
-${input.query}
+${query}
 
 CONTEXT:
-${input.context}
+${context}
 
 GENERATED ANSWER:
-${input.answer}
+${answer}
 `;
 
     const response = await this.evaluationLLM.generate(prompt);
+
     return this.parseEvaluation(response);
   }
 
   private parseEvaluation(response: string): EvaluationResult {
-    try {
-      const parsed = JSON.parse(this.extractJson(response)) as EvaluationResult;
+    const json = this.extractJson(response);
+    const result = evaluationResultSchema.safeParse(JSON.parse(json));
 
-      this.validateEvaluation(parsed);
-
-      return parsed;
-    } catch (error) {
+    if (!result.success) {
       throw new Error(
-        `Failed to parse LLM evaluation response: ${error instanceof Error ? error.message : String(error)}`,
+        `Invalid LLM evaluation response: ${result.error.message}`,
       );
     }
+
+    return result.data;
   }
 
   private extractJson(response: string): string {
-    const fencedMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    const fencedMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/i);
 
     if (fencedMatch?.[1]) {
       return fencedMatch[1];
@@ -123,48 +134,5 @@ ${input.answer}
     }
 
     return response.slice(start, end + 1);
-  }
-
-  private validateEvaluation(result: EvaluationResult): void {
-    const scores = [
-      result.faithfulness,
-      result.relevance,
-      result.completeness,
-      result.contextSufficiency,
-    ];
-
-    if (!["pass", "needs_revision"].includes(result.verdict)) {
-      throw new Error("Invalid evaluation verdict");
-    }
-
-    if (scores.some((score) => !Number.isInteger(score) || score < 1 || score > 5)) {
-      throw new Error("Evaluation scores must be integers from 1 to 5");
-    }
-
-    if (!Array.isArray(result.issues)) {
-      throw new Error("Evaluation issues must be an array");
-    }
-
-    if (typeof result.reasoning !== "string") {
-      throw new Error("Evaluation reasoning must be a string");
-    }
-
-    for (const issue of result.issues) {
-      if (
-        !["unsupported_claim", "incorrect_claim", "missing_information", "irrelevant_content"].includes(
-          issue.type,
-        )
-      ) {
-        throw new Error(`Invalid evaluation issue type: ${issue.type}`);
-      }
-
-      if (!["low", "medium", "high"].includes(issue.severity)) {
-        throw new Error(`Invalid evaluation issue severity: ${issue.severity}`);
-      }
-
-      if (typeof issue.description !== "string") {
-        throw new Error("Evaluation issue description must be a string");
-      }
-    }
   }
 }
