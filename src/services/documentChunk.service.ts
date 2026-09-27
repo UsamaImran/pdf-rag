@@ -59,7 +59,6 @@ export class DocumentChunkService {
     await DocumentChunkModel.insertMany(
       chunks.map((chunk, index) => ({
         documentId,
-        documentStatus: "processing",
         index: chunk.index,
         text: chunk.text,
         tokenCount: chunk.tokenCount,
@@ -68,11 +67,5 @@ export class DocumentChunkService {
     );
   }
 
-  async markCompleted(documentId: string): Promise<void> {
-    await DocumentChunkModel.updateMany(
-      { documentId },
-      { $set: { documentStatus: "completed" } },
-    );
-  }
 }
 
