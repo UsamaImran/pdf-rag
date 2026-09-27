@@ -5,4 +5,3 @@ export const gemini = new GoogleGenAI({
 });
 
 export const GEMINI_TEXT_MODEL = "gemini-3.6-flash";
-export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
