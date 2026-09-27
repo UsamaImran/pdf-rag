@@ -78,7 +78,10 @@ export class DocumentProcessorService {
 
       console.log(`Stored ${chunks.length} chunks for document ${documentId}`);
 
-      // 8. Mark document as completed
+      // 8. Mark chunks as searchable before marking the document completed.
+      await this.chunkService.markCompleted(documentId);
+
+      // 9. Mark document as completed
       await DocumentModel.findByIdAndUpdate(documentId, {
         status: "completed",
       });
