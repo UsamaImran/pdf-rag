@@ -1,4 +1,3 @@
-import { Types } from "mongoose";
 import { DocumentModel } from "../models/document.model.js";
 import {
   VectorSearchService,
