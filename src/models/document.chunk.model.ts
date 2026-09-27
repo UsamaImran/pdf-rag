@@ -9,12 +9,6 @@ const documentChunkSchema = new Schema(
       index: true,
     },
 
-    documentStatus: {
-      type: String,
-      required: true,
-      enum: ["processing", "completed", "failed"],
-      index: true,
-    },
 
     index: {
       type: Number,
@@ -47,7 +41,7 @@ export const DocumentChunkModel = model("DocumentChunk", documentChunkSchema);
 
 // Vector Search index
 DocumentChunkModel.collection.createSearchIndex({
-  name: "document_chunks_vector_index_768_v2",
+  name: "document_chunks_vector_index_768_v3",
   type: "vectorSearch",
   definition: {
     fields: [
@@ -59,14 +53,14 @@ DocumentChunkModel.collection.createSearchIndex({
       },
       {
         type: "filter",
-        path: "documentStatus",
+        path: "documentId",
       },
     ],
   },
 });
 
 DocumentChunkModel.collection.createSearchIndex({
-  name: "document_chunks_text_index_v2",
+  name: "document_chunks_text_index_v3",
   type: "search",
   definition: {
     mappings: {
@@ -76,8 +70,7 @@ DocumentChunkModel.collection.createSearchIndex({
           type: "string",
           analyzer: "lucene.standard",
         },
-        documentId: { type: "string" },
-        documentStatus: { type: "string" },
+        documentId: { type: "objectId" },
       },
     },
   },
