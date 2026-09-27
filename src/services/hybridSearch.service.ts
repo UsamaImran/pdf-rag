@@ -7,7 +7,16 @@ import {
   type KeywordRetrievedChunk,
 } from "./keywordSearch.service.js";
 
+export interface RetrievalSource {
+  rank: number;
+  score: number;
+}
+
 export interface HybridChunk extends RetrievedChunk {
+  sources: {
+    semantic?: RetrievalSource;
+    keyword?: RetrievalSource;
+  };
   finalScore: number;
 }
 
@@ -23,10 +32,14 @@ export class HybridSearchService {
     queryEmbedding: number[],
     limit = 5,
   ): Promise<HybridChunk[]> {
+    // Retrieve a larger candidate pool from each retriever, then
+    // let RRF rerank the candidates down to the requested final limit.
+    const candidateLimit = Math.max(limit * 10, 50);
+
     // Run both in parallel
     const [vectorResults, keywordResults] = await Promise.all([
-      this.vectorSearch.search(queryEmbedding, limit * 2),
-      this.keywordSearch.search(query, limit * 2),
+      this.vectorSearch.search(queryEmbedding, candidateLimit),
+      this.keywordSearch.search(query, candidateLimit),
     ]);
 
     // Combine using Reciprocal Rank Fusion
@@ -43,27 +56,59 @@ export class HybridSearchService {
     keywordResults: KeywordRetrievedChunk[],
     limit: number,
   ): HybridChunk[] {
-    const scores = new Map<string, { chunk: RetrievedChunk; score: number }>();
+    type FusedResult = {
+      chunk: RetrievedChunk;
+      sources: HybridChunk["sources"];
+      score: number;
+    };
+
+    const scores = new Map<string, FusedResult>();
 
     // Helper to generate a unique key for deduplication
     const key = (c: RetrievedChunk) => `${c.documentId}:${c.index}`;
 
-    // Score vector results
+    // Score vector results and preserve semantic retrieval provenance.
     vectorResults.forEach((chunk, rank) => {
       const id = key(chunk);
-      const rrfScore = 1 / (this.k + rank + 1);
-      scores.set(id, { chunk, score: rrfScore });
+      const retrievalRank = rank + 1;
+      const rrfScore = 1 / (this.k + retrievalRank);
+
+      scores.set(id, {
+        chunk,
+        sources: {
+          semantic: {
+            rank: retrievalRank,
+            score: chunk.score,
+          },
+        },
+        score: rrfScore,
+      });
     });
 
-    // Score keyword results
+    // Score keyword results and preserve keyword retrieval provenance.
     keywordResults.forEach((chunk, rank) => {
       const id = key(chunk);
-      const rrfScore = 1 / (this.k + rank + 1);
+      const retrievalRank = rank + 1;
+      const rrfScore = 1 / (this.k + retrievalRank);
       const existing = scores.get(id);
+
       if (existing) {
-        existing.score += rrfScore; // sum scores if chunk appears in both
+        existing.sources.keyword = {
+          rank: retrievalRank,
+          score: chunk.score,
+        };
+        existing.score += rrfScore;
       } else {
-        scores.set(id, { chunk, score: rrfScore });
+        scores.set(id, {
+          chunk,
+          sources: {
+            keyword: {
+              rank: retrievalRank,
+              score: chunk.score,
+            },
+          },
+          score: rrfScore,
+        });
       }
     });
 
@@ -74,6 +119,7 @@ export class HybridSearchService {
 
     return sorted.map((item) => ({
       ...item.chunk,
+      sources: item.sources,
       finalScore: item.score,
     }));
   }

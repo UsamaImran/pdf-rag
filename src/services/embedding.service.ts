@@ -1,51 +1,57 @@
-import { gemini, GEMINI_EMBEDDING_MODEL } from "../config/gemini.js";
+import { EmbeddingModel, FlagEmbedding } from "fastembed";
+
+const EMBEDDING_MODEL = EmbeddingModel.BGEBaseEN;
+const EMBEDDING_DIMENSIONS = 768;
+const EMBEDDING_BATCH_SIZE = 32;
+
+let embeddingModelPromise: Promise<FlagEmbedding> | undefined;
+
+async function getEmbeddingModel(): Promise<FlagEmbedding> {
+  embeddingModelPromise ??= FlagEmbedding.init({
+    model: EMBEDDING_MODEL,
+  });
+
+  return embeddingModelPromise;
+}
+
+function validateEmbedding(embedding: number[]): number[] {
+  if (embedding.length !== EMBEDDING_DIMENSIONS) {
+    throw new Error(
+      `Unexpected embedding dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedding.length}.`,
+    );
+  }
+
+  return embedding;
+}
 
 export class EmbeddingService {
-  private readonly model = GEMINI_EMBEDDING_MODEL;
-  private readonly batchSize = 80;
-
   async embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) {
       return [];
     }
 
+    const model = await getEmbeddingModel();
     const embeddings: number[][] = [];
 
-    for (let i = 0; i < texts.length; i += this.batchSize) {
-      const batch = texts.slice(i, i + this.batchSize);
-
-      const result = await gemini.models.embedContent({
-        model: this.model,
-        contents: batch,
-        config: {
-          taskType: "RETRIEVAL_DOCUMENT",
-        },
-      });
-
-      const batchEmbeddings =
-        result.embeddings?.map((embedding) => embedding.values ?? []) ?? [];
-
-      embeddings.push(...batchEmbeddings);
+    for await (const batch of model.passageEmbed(texts, EMBEDDING_BATCH_SIZE)) {
+      embeddings.push(...batch);
     }
 
-    return embeddings;
+    if (embeddings.length !== texts.length) {
+      throw new Error(
+        `Embedding count mismatch. Expected ${texts.length}, got ${embeddings.length}.`,
+      );
+    }
+
+    return embeddings.map(validateEmbedding);
   }
 
   async embedQuery(text: string): Promise<number[]> {
-    const result = await gemini.models.embedContent({
-      model: this.model,
-      contents: text,
-      config: {
-        taskType: "RETRIEVAL_QUERY",
-      },
-    });
-
-    const embedding = result.embeddings?.[0]?.values;
-
-    if (!embedding?.length) {
-      throw new Error("Failed to generate query embedding");
+    if (!text.trim()) {
+      throw new Error("Query text is empty");
     }
 
-    return embedding;
+    const model = await getEmbeddingModel();
+    return validateEmbedding(await model.queryEmbed(text));
   }
 }

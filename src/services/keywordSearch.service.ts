@@ -25,8 +25,7 @@ export class KeywordSearchService {
           text: {
             query,
             path: "text",
-            fuzzy: { maxEdits: 1, prefixLength: 3 },
-          },
+            },
         },
       },
       { $limit: limit },
