@@ -6,11 +6,17 @@ export class SearchController {
 
   search = async (req: Request, res: Response) => {
     try {
-      const { query, feedbackLoop = false } = req.body;
+      const { query, evaluate = true, feedbackLoop = false } = req.body;
 
       if (!query || typeof query !== "string") {
         return res.status(400).json({
           message: "query is required",
+        });
+      }
+
+      if (typeof evaluate !== "boolean") {
+        return res.status(400).json({
+          message: "evaluate must be a boolean",
         });
       }
 
@@ -20,7 +26,14 @@ export class SearchController {
         });
       }
 
+      if (feedbackLoop && !evaluate) {
+        return res.status(400).json({
+          message: "feedbackLoop requires evaluation to be enabled",
+        });
+      }
+
       const result = await this.answerService.answer(query, {
+        evaluate,
         feedbackLoop,
       });
 
