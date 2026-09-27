@@ -40,14 +40,14 @@ export const DocumentChunkModel = model("DocumentChunk", documentChunkSchema);
 
 // Vector Search index
 DocumentChunkModel.collection.createSearchIndex({
-  name: "document_chunks_vector_index_2560",
+  name: "document_chunks_vector_index_768",
   type: "vectorSearch",
   definition: {
     fields: [
       {
         type: "vector",
         path: "embedding",
-        numDimensions: 2560,
+        numDimensions: 768,
         similarity: "cosine",
       },
     ],
