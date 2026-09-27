@@ -1,39 +1,27 @@
-import { env, pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
+import { EmbeddingModel, FlagEmbedding } from "fastembed";
 
-const LOCAL_EMBEDDING_MODEL =
-  process.env.LOCAL_EMBEDDING_MODEL ?? "dssjon/Qwen3-Embedding-4B-ONNX";
+const EMBEDDING_MODEL = EmbeddingModel.BGEBaseEN;
+const EMBEDDING_DIMENSIONS = 768;
+const EMBEDDING_BATCH_SIZE = 32;
 
-const EMBEDDING_DIMENSIONS = 2560;
-const EMBEDDING_BATCH_SIZE = 8;
-const EMBEDDING_TASK =
-  "Given a user query, retrieve relevant passages from the provided documents that answer the query";
+let embeddingModelPromise: Promise<FlagEmbedding> | undefined;
 
-env.allowLocalModels = true;
-
-let extractorPromise: Promise<FeatureExtractionPipeline> | undefined;
-
-async function getExtractor(): Promise<FeatureExtractionPipeline> {
-  extractorPromise ??= pipeline("feature-extraction", LOCAL_EMBEDDING_MODEL, {
-    dtype: "fp32",
-    device: "cpu",
-    use_external_data_format: true,
+async function getEmbeddingModel(): Promise<FlagEmbedding> {
+  embeddingModelPromise ??= FlagEmbedding.init({
+    model: EMBEDDING_MODEL,
   });
 
-  return extractorPromise;
+  return embeddingModelPromise;
 }
 
-function validateEmbeddings(embeddings: number[][]): number[][] {
-  if (
-    embeddings.some(
-      (embedding) => embedding.length !== EMBEDDING_DIMENSIONS,
-    )
-  ) {
+function validateEmbedding(embedding: number[]): number[] {
+  if (embedding.length !== EMBEDDING_DIMENSIONS) {
     throw new Error(
-      `Unexpected embedding dimensions. Expected ${EMBEDDING_DIMENSIONS} dimensions from ${LOCAL_EMBEDDING_MODEL}.`,
+      `Unexpected embedding dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedding.length}.`,
     );
   }
 
-  return embeddings;
+  return embedding;
 }
 
 export class EmbeddingService {
@@ -42,29 +30,22 @@ export class EmbeddingService {
       return [];
     }
 
-    const extractor = await getExtractor();
+    const model = await getEmbeddingModel();
     const embeddings: number[][] = [];
 
-    for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
-      const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE);
+    const batches = model.passageEmbed(texts, EMBEDDING_BATCH_SIZE);
 
-      const output = await extractor(batch, {
-        pooling: "last_token",
-        normalize: true,
-      });
-
-      const batchEmbeddings = output.tolist() as number[][];
-
-      if (batchEmbeddings.length !== batch.length) {
-        throw new Error(
-          `Embedding count mismatch. Expected ${batch.length}, got ${batchEmbeddings.length}.`,
-        );
-      }
-
-      embeddings.push(...batchEmbeddings);
+    for await (const batch of batches) {
+      embeddings.push(...batch);
     }
 
-    return validateEmbeddings(embeddings);
+    if (embeddings.length !== texts.length) {
+      throw new Error(
+        `Embedding count mismatch. Expected ${texts.length}, got ${embeddings.length}.`,
+      );
+    }
+
+    return embeddings.map(validateEmbedding);
   }
 
   async embedQuery(text: string): Promise<number[]> {
@@ -72,17 +53,9 @@ export class EmbeddingService {
       throw new Error("Query text is empty");
     }
 
-    const extractor = await getExtractor();
+    const model = await getEmbeddingModel();
+    const embedding = await model.queryEmbed(text);
 
-    const output = await extractor(
-      `Instruct: ${EMBEDDING_TASK}\nQuery:${text}`,
-      {
-        pooling: "last_token",
-        normalize: true,
-      },
-    );
-
-    const embedding = output.tolist() as number[];
-    return validateEmbeddings([embedding])[0];
+    return validateEmbedding(embedding);
   }
 }
