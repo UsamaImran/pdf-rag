@@ -1,8 +1,8 @@
 import { EmbeddingService } from "./embedding.service.js";
 import { type RetrievedChunk } from "./vectorSearch.service.js";
 import { ContextBuilderService } from "./contextBuilder.service.js";
-import { gemini, GEMINI_TEXT_MODEL } from "../config/gemini.js";
 import { HybridSearchService } from "./hybridSearch.service.js";
+import { LLMService } from "./llm.service.js";
 
 export interface AnswerResult {
   answer: string;
@@ -13,6 +13,7 @@ export class AnswerService {
   private readonly embeddingService = new EmbeddingService();
   private readonly hybridSearch = new HybridSearchService();
   private readonly contextBuilder = new ContextBuilderService();
+  private readonly generationLLM = new LLMService();
 
   async answer(query: string): Promise<AnswerResult> {
     const queryEmbedding = await this.embeddingService.embedQuery(query);
@@ -60,17 +61,6 @@ ${query}
 ANSWER:
 `;
 
-    const result = await gemini.models.generateContent({
-      model: GEMINI_TEXT_MODEL,
-      contents: prompt,
-    });
-
-    const answer = result.text?.trim();
-
-    if (!answer) {
-      throw new Error("Gemini returned an empty answer");
-    }
-
-    return answer;
+    return this.generationLLM.generate(prompt);
   }
 }
