@@ -9,6 +9,7 @@ import {
 import { LLMService } from "./llm.service.js";
 
 export interface AnswerOptions {
+  evaluate?: boolean;
   feedbackLoop?: boolean;
 }
 
@@ -20,7 +21,7 @@ export interface PreviousAttempt {
 export interface AnswerResult {
   answer: string;
   sources: RetrievedChunk[];
-  evaluation: EvaluationResult;
+  evaluation?: EvaluationResult;
   previousAttempts?: PreviousAttempt[];
 }
 
@@ -49,14 +50,23 @@ export class AnswerService {
     // 2. Generate the initial answer.
     let answer = await this.generateAnswer(query, context.text);
 
-    // 3. Every generated answer is evaluated, including revisions.
+    const previousAttempts: PreviousAttempt[] = [];
+    const shouldEvaluate = options.evaluate ?? true;
+
+    if (!shouldEvaluate) {
+      return {
+        answer,
+        sources: context.sources,
+      };
+    }
+
+    // 3. Evaluate the initial answer when evaluation is enabled.
     let evaluation = await this.evaluationService.evaluate({
       query,
       context: context.text,
       answer,
     });
 
-    const previousAttempts: PreviousAttempt[] = [];
     const maxAttempts = options.feedbackLoop ? 2 : 1;
 
     // 4. If feedbackLoop is enabled, allow one revision after the initial attempt.
