@@ -42,7 +42,7 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
                                       │  • Download PDF             │
                                       │  • Extract text             │
                                       │  • Token-aware chunk        │
-                                      │  • Embed (Gemini)           │
+                                      │  • Embed (local FastEmbed)   │
                                       │  • Save chunks + vectors    │
                                       │  • status → completed       │
                                       └─────────────────────────────┘
@@ -99,7 +99,8 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
 | ---------------- | ------------------------------- |
 | Runtime          | Node.js 22, TypeScript          |
 | HTTP             | Express 5                       |
-| LLM / Embeddings | Google Gemini (`@google/genai`) |
+| LLM              | Google Gemini (`@google/genai`) |
+| Embeddings       | FastEmbed BGE-base (768 dimensions) |
 | Vector DB        | MongoDB Atlas Vector Search     |
 | Full-Text Search | MongoDB Atlas Search (Lucene)   |
 | Object storage   | Storj (S3-compatible)           |
@@ -113,7 +114,7 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
 
 - Node.js 22+
 - Docker & Docker Compose
-- [Google AI API key](https://aistudio.google.com/apikey) (Gemini)
+- [Google AI API key](https://aistudio.google.com/apikey) (Gemini generation only)
 - Storj account (or any S3-compatible storage)
 
 ---
@@ -328,7 +329,7 @@ src/
    - Downloads the PDF
    - Extracts text
    - Splits into overlapping token-aware chunks (800 / 100)
-   - Embeds all chunks with Gemini (`RETRIEVAL_DOCUMENT`)
+   - Embeds all chunks locally with FastEmbed BGE-base
    - Inserts chunks + vectors into MongoDB
    - Marks document `completed` (or `failed` on error)
 4. **Search** — Query is embedded (`RETRIEVAL_QUERY`), then hybrid retrieval runs:
