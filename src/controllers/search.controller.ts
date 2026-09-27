@@ -6,7 +6,7 @@ export class SearchController {
 
   search = async (req: Request, res: Response) => {
     try {
-      const { query, evaluate = true, feedbackLoop = false } = req.body;
+      const { query, evaluate = false, feedbackLoop = false } = req.body;
 
       if (!query || typeof query !== "string") {
         return res.status(400).json({
