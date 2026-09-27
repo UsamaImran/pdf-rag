@@ -82,10 +82,6 @@ export class DocumentProcessorService {
       await DocumentModel.findByIdAndUpdate(documentId, {
         status: "completed",
       });
-
-      // 9. Mark chunks as searchable after document completion.
-      await this.chunkService.markCompleted(documentId);
-
       console.log(`Document processing completed: ${documentId}`);
     } catch (error) {
       await DocumentModel.findByIdAndUpdate(documentId, {
