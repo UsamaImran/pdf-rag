@@ -51,7 +51,7 @@ export class AnswerService {
     let answer = await this.generateAnswer(query, context.text);
 
     const previousAttempts: PreviousAttempt[] = [];
-    const shouldEvaluate = options.evaluate ?? true;
+    const shouldEvaluate = options.evaluate ?? false;
 
     if (!shouldEvaluate) {
       return {
