@@ -16,6 +16,8 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
   - `RETRIEVAL_QUERY` for search
 - **Hybrid Retrieval** — combines **MongoDB Atlas Vector Search** (semantic similarity) with **Atlas Search** (Lucene-based keyword search) via **Reciprocal Rank Fusion (RRF)**
 - **Grounded Q&A** — answers are generated only from retrieved context
+- **LLM evaluation** — every generated answer is evaluated for faithfulness, relevance, completeness, and context sufficiency
+- **Optional feedback loop** — when enabled, a failed answer can be revised once using evaluator feedback and evaluated again
 - **Source citations** with fusion scores returned with every answer
 - **Docker Compose** setup (API + MongoDB Atlas Local + RabbitMQ)
 
@@ -86,7 +88,26 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
                                        └──────────────────────┘
                                                    │
                                                    ▼
-                                          { answer, sources }
+                                       ┌──────────────────────┐
+                                       │  LLM Evaluation      │
+                                       │ • Faithfulness       │
+                                       │ • Relevance          │
+                                       │ • Completeness       │
+                                       │ • Context sufficiency│
+                                       └──────────┬───────────┘
+                                                  │
+                                      feedbackLoop=true?
+                                             │          │
+                                            no         yes
+                                             │          │
+                                             │    needs_revision?
+                                             │       │        │
+                                             │      no       yes
+                                             │       │        │
+                                             └───────┴───► Revision → Evaluation
+                                                  │
+                                                  ▼
+                                      { answer, sources, evaluation }
 ```
 
 **Document status flow:** `uploaded` → `processing` → `completed` | `failed`
@@ -245,7 +266,8 @@ Content-Type: application/json
 
 ```json
 {
-  "query": "What are the main findings in the report?"
+  "query": "What are the main findings in the report?",
+  "feedbackLoop": true
 }
 ```
 
@@ -262,9 +284,20 @@ Content-Type: application/json
       "tokenCount": 742,
       "score": 0.0312
     }
-  ]
+  ],
+  "evaluation": {
+    "verdict": "pass",
+    "faithfulness": 5,
+    "relevance": 5,
+    "completeness": 4,
+    "contextSufficiency": 5,
+    "issues": [],
+    "reasoning": "The answer is supported by the supplied context."
+  }
 }
 ```
+
+`feedbackLoop` defaults to `false`. When `true`, the system allows at most one revision after the initial generation. The revised answer is evaluated again before it is returned. If a revision occurs, the superseded answer and its evaluation are included in `previousAttempts`.
 
 If no relevant context is found:
 
@@ -304,11 +337,12 @@ src/
 │   ├── document.routes.ts
 │   └── search.routes.ts
 └── services/
-    ├── answer.service.ts           # Orchestrates retrieval + generation
+    ├── answer.service.ts           # Orchestrates retrieval + generation + evaluation
     ├── contextBuilder.service.ts   # Formats + dedup + ranks retrieved chunks
     ├── document.service.ts         # Create document + publish event
     ├── documentChunk.service.ts    # Chunking + save
     ├── documentProcessor.service.ts# Full ingestion pipeline
+   ├── evaluation.service.ts       # LLM-based answer evaluation
     ├── embedding.service.ts        # Document & query embeddings
     ├── fileService.ts              # Upload / download / delete
     ├── hybridSearch.service.ts     # RRF fusion of vector + keyword results
@@ -332,12 +366,14 @@ src/
    - Embeds all chunks locally with FastEmbed BGE-base
    - Inserts chunks + vectors into MongoDB
    - Marks document `completed` (or `failed` on error)
-4. **Search** — Query is embedded locally with Qwen3-Embedding-4B, then hybrid retrieval runs:
+4. **Search** — Query is embedded locally with FastEmbed BGE-base, then hybrid retrieval runs:
    - **Vector search** finds semantically similar chunks via `$vectorSearch`
    - **Keyword search** finds exact term matches via `$search` (Lucene/BM25)
    - **RRF fusion** combines both ranked lists into a single relevance-ordered result set
    - `ContextBuilderService` deduplicates, sorts by fusion score, and formats context with provenance
    - Gemini generates a grounded answer from the fused context
+   - `EvaluationService` evaluates the generated answer against the same query and context
+   - When `feedbackLoop` is enabled and evaluation returns `needs_revision`, the generator receives the previous answer plus structured evaluator feedback, produces one revision, and the revision is evaluated again
 
 ---
 
@@ -349,7 +385,7 @@ The system uses **two indexes** on the `DocumentChunk` collection:
 
 | Setting    | Value                               |
 | ---------- | ----------------------------------- |
-| Name       | `document_chunks_vector_index_2560` |
+| Name       | `document_chunks_vector_index_768` |
 | Type       | `vectorSearch`                      |
 | Path       | `embedding`                         |
 | Dimensions | `768`                               |
