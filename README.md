@@ -120,7 +120,7 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
 | ---------------- | ----------------------------------- |
 | Runtime          | Node.js 22, TypeScript              |
 | HTTP             | Express 5                           |
-| LLM              | Google Gemini (`@google/genai`)     |
+| LLM              | Vercel AI SDK (`ai`, `@ai-sdk/google`) |
 | Embeddings       | FastEmbed BGE-base (768 dimensions) |
 | Vector DB        | MongoDB Atlas Vector Search         |
 | Full-Text Search | MongoDB Atlas Search (Lucene)       |
@@ -151,8 +151,11 @@ PORT=3000
 # MongoDB (Atlas Local in Docker)
 MONGO_URI=mongodb://mongodb:27017/pdf-rag
 
-# Gemini
+# Gemini (Vercel AI SDK)
 GEMINI_API_KEY=your_gemini_api_key
+# Optional model overrides (default: gemini-3.6-flash)
+# GEMINI_GENERATION_MODEL=gemini-3.6-flash
+# GEMINI_EVALUATION_MODEL=gemini-3.6-flash
 
 # Storj / S3-compatible storage
 STORJ_ENDPOINT=https://gateway.storjshare.io
@@ -317,8 +320,8 @@ src/
 ├── app.ts                          # Express app setup
 ├── server.ts                       # Bootstrap (DB, consumers, listen)
 ├── config/
+│   ├── ai.ts                       # Vercel AI SDK client & model handles
 │   ├── database.ts                 # MongoDB connection
-│   ├── gemini.ts                   # Shared Gemini client
 │   ├── messageQueue.ts             # RabbitMQ URL
 │   └── storage.ts                  # S3 / Storj client
 ├── controllers/
@@ -342,11 +345,12 @@ src/
     ├── document.service.ts         # Create document + publish event
     ├── documentChunk.service.ts    # Chunking + save
     ├── documentProcessor.service.ts# Full ingestion pipeline
-   ├── evaluation.service.ts       # LLM-based answer evaluation
     ├── embedding.service.ts        # Document & query embeddings
+    ├── evaluation.service.ts       # Structured answer evaluation (Output.object + Zod)
     ├── fileService.ts              # Upload / download / delete
     ├── hybridSearch.service.ts     # RRF fusion of vector + keyword results
     ├── keywordSearch.service.ts    # Atlas Search ($search) aggregation
+    ├── llm.service.ts              # Text generation via Vercel AI SDK
     ├── pdfTextExtractor.service.ts
     ├── tokenizer.service.ts
     └── vectorSearch.service.ts     # Atlas Vector Search ($vectorSearch) aggregation
@@ -371,8 +375,8 @@ src/
    - **Keyword search** finds exact term matches via `$search` (Lucene/BM25)
    - **RRF fusion** combines both ranked lists into a single relevance-ordered result set
    - `ContextBuilderService` deduplicates, sorts by fusion score, and formats context with provenance
-   - Gemini generates a grounded answer from the fused context
-   - `EvaluationService` evaluates the generated answer against the same query and context
+   - Vercel AI SDK generates a grounded answer via `generateText` from the fused context
+   - `EvaluationService` evaluates the generated answer via Vercel AI SDK structured outputs (`Output.object` + Zod)
    - When `feedbackLoop` is enabled and evaluation returns `needs_revision`, the generator receives the previous answer plus structured evaluator feedback, produces one revision, and the revision is evaluated again
 
 ---
@@ -424,6 +428,6 @@ The system uses **two indexes** on the `DocumentChunk` collection:
 
 ### Local embeddings
 
-Embeddings are generated locally with FastEmbed using the BGE-base model. The same model is used for document passages during ingestion and user queries during retrieval. Gemini is used only for final answer generation.
+Embeddings are generated locally with FastEmbed using the BGE-base model. The same model is used for document passages during ingestion and user queries during retrieval. Vercel AI SDK (Gemini) is used only for answer generation and structured evaluation.
 
 The BGE-base model produces 768-dimensional vectors, so the MongoDB vector search index is configured for 768 dimensions. The model is downloaded/cached locally on first use; no embedding API key or embedding request is required.
