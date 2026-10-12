@@ -2,7 +2,7 @@
 
 End-to-end **Retrieval-Augmented Generation (RAG)** system for PDF documents with **hybrid search** (semantic + keyword).
 
-Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE embeddings → **MongoDB Atlas Hybrid Search** → grounded answers via Gemini.
+Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE embeddings → **MongoDB Atlas Hybrid Search** → grounded answers via **Vercel AI SDK** (Google Gemini).
 
 ---
 
@@ -16,7 +16,7 @@ Upload PDFs → extract text → token-aware chunking → local FastEmbed BGE em
   - `RETRIEVAL_QUERY` for search
 - **Hybrid Retrieval** — combines **MongoDB Atlas Vector Search** (semantic similarity) with **Atlas Search** (Lucene-based keyword search) via **Reciprocal Rank Fusion (RRF)**
 - **Grounded Q&A** — answers are generated only from retrieved context
-- **LLM evaluation** — every generated answer is evaluated for faithfulness, relevance, completeness, and context sufficiency
+- **LLM evaluation** — every generated answer is evaluated for faithfulness, relevance, completeness, and context sufficiency using Vercel AI SDK structured outputs (`Output.object` + Zod)
 - **Optional feedback loop** — when enabled, a failed answer can be revised once using evaluator feedback and evaluated again
 - **Source citations** with fusion scores returned with every answer
 - **Docker Compose** setup (API + MongoDB Atlas Local + RabbitMQ)
