@@ -21,8 +21,9 @@
   },
   "homepage": "https://github.com/UsamaImran/pdf-rag#readme",
   "dependencies": {
+    "@ai-sdk/google": "^4.0.93",
     "@aws-sdk/client-s3": "^3.1117.0",
-    "@google/genai": "^2.18.0",
+    "ai": "^7.0.137",
     "bpe-lite": "^0.5.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

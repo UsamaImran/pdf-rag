@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { LLMService } from "./llm.service.js";
+import { generateText, Output, type LanguageModel } from "ai";
+import { google, evaluationModel } from "../config/ai.js";
 
-const evaluationIssueSchema = z.object({
+export const evaluationIssueSchema = z.object({
   type: z.enum([
     "unsupported_claim",
     "incorrect_claim",
@@ -12,7 +13,7 @@ const evaluationIssueSchema = z.object({
   description: z.string(),
 });
 
-const evaluationResultSchema = z.object({
+export const evaluationResultSchema = z.object({
   verdict: z.enum(["pass", "needs_revision"]),
   faithfulness: z.number().int().min(1).max(5),
   relevance: z.number().int().min(1).max(5),
@@ -31,8 +32,28 @@ export interface EvaluationInput {
   answer: string;
 }
 
+export interface EvaluationServiceOptions {
+  model?: string | LanguageModel;
+  maxRetries?: number;
+  timeoutMs?: number;
+}
+
 export class EvaluationService {
-  private readonly evaluationLLM = new LLMService();
+  private readonly model: LanguageModel;
+  private readonly maxRetries: number;
+  private readonly timeoutMs: number;
+
+  constructor(options: EvaluationServiceOptions = {}) {
+    if (typeof options.model === "object" && options.model !== null) {
+      this.model = options.model;
+    } else if (typeof options.model === "string" && options.model.trim()) {
+      this.model = google(options.model.trim());
+    } else {
+      this.model = evaluationModel;
+    }
+    this.maxRetries = options.maxRetries ?? 2;
+    this.timeoutMs = options.timeoutMs ?? 25000;
+  }
 
   async evaluate({
     query,
@@ -101,38 +122,23 @@ GENERATED ANSWER:
 ${answer}
 `;
 
-    const response = await this.evaluationLLM.generate(prompt);
+    try {
+      const { output } = await generateText({
+        model: this.model,
+        output: Output.object({ schema: evaluationResultSchema }),
+        prompt,
+        maxRetries: this.maxRetries,
+        abortSignal: AbortSignal.timeout(this.timeoutMs),
+      });
 
-    return this.parseEvaluation(response);
-  }
-
-  private parseEvaluation(response: string): EvaluationResult {
-    const json = this.extractJson(response);
-    const result = evaluationResultSchema.safeParse(JSON.parse(json));
-
-    if (!result.success) {
-      throw new Error(
-        `Invalid LLM evaluation response: ${result.error.message}`,
-      );
+      return output;
+    } catch (error: any) {
+      console.error("[EvaluationService.evaluate] Evaluation failed:", {
+        name: error?.name || "Error",
+        message: error?.message || "Unknown error",
+        timeoutMs: this.timeoutMs,
+      });
+      throw error;
     }
-
-    return result.data;
-  }
-
-  private extractJson(response: string): string {
-    const fencedMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/i);
-
-    if (fencedMatch?.[1]) {
-      return fencedMatch[1];
-    }
-
-    const start = response.indexOf("{");
-    const end = response.lastIndexOf("}");
-
-    if (start === -1 || end === -1 || end < start) {
-      throw new Error("Evaluation response does not contain a JSON object");
-    }
-
-    return response.slice(start, end + 1);
   }
 }
